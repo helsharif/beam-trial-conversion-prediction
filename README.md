@@ -42,21 +42,32 @@ Copy-Item .env.example .env
 
 The loader reads `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Access to `ml.trial_snapshot_latest` is required to download data. `.env` and the raw/processed CSV snapshots are ignored by Git; a fresh clone does not include the dataset.
 
-Alternatively, place an authorized CSV with the schema above at `data/01_raw/trials_raw.csv` and skip `download_data()`.
+If you already have an authorized CSV, place it at `data/01_raw/trials_raw.csv` and use the existing-CSV workflow below. The required schema is listed under **Data and features**.
 
 ### 3. Train both models
 
-Start Python with `uv run python`, then run:
+Run the training script from the repository root:
+
+```bash
+uv run scripts/train.py
+```
+
+The script downloads a fresh snapshot, cleans the data, builds features, and trains logistic regression followed by XGBoost. Each model prints and exports **train metrics first, then test metrics**, and saves its fitted model in `models/`.
+
+The script always calls `download_data()`, replacing `data/01_raw/trials_raw.csv`. It requires database access and has no option to skip the download.
+
+### Alternative: train from an existing CSV
+
+To use the local snapshot without downloading it again, start Python with `uv run python`, then run:
 
 ```python
-from trial_conversion_model.data import download_data, load_data
+from trial_conversion_model.data import load_data
 from trial_conversion_model.features import build_features
-from trial_conversion_model.train import (
+from trial_conversion_model.training import (
     train_model_logistic_regression,
     train_model_xgboost,
 )
 
-download_data()  # Skip if the raw CSV is already available.
 df = load_data()
 df = build_features(df)
 
@@ -64,11 +75,15 @@ lr_model = train_model_logistic_regression(df)
 xgb_model = train_model_xgboost(df)
 ```
 
+### Alternative: use a notebook
+
 For interactive work, open [notebooks/01_thin_notebook.ipynb](notebooks/01_thin_notebook.ipynb) in a notebook-capable editor and select the project's `.venv` Python kernel. The notebook locates the project root before running the workflow. The [original notebook](trial_conversion_model.ipynb) contains the exploratory analysis, its own database connection setup, and the illustrative intervention cutoff.
 
-The `trial-conversion-model` console entry declared in `pyproject.toml` points to a `main` function that is not implemented; use the Python workflow or thin notebook above.
+The `trial-conversion-model` console entry declared in `pyproject.toml` still points to a package `main` function that is not implemented. Use `uv run scripts/train.py` for the full workflow.
 
 ## How it works
+
+`scripts/train.py` coordinates the workflow; the reusable data, feature, and training functions live in `src/trial_conversion_model/`.
 
 1. Download completed-trial snapshots from PostgreSQL view `ml.trial_snapshot_latest`.
 2. Load the local CSV, remove duplicate rows and rows with missing values, and parse date columns.
@@ -139,17 +154,18 @@ The confusion matrices from the same run are summarized below. **TN** means corr
 
 XGBoost has higher test ROC-AUC and average precision in this run. Its stronger train scores also show a train/test gap that warrants validation on later cohorts.
 
-Full reports: [logistic regression](models/logistic_regression_metrics_2026-09-14_07-13-35.txt) · [XGBoost](models/xgboost_metrics_2026-09-14_07-13-35.txt).
+Full reports: [logistic regression](models/logistic_regression_metrics_2026-09-14_11-04-07.txt) · [XGBoost](models/xgboost_metrics_2026-09-14_11-04-07.txt).
 
 ## Where to find things
 
 | Location | Purpose |
 | --- | --- |
+| [scripts/train.py](scripts/train.py) | Run the full download, preparation, and training workflow. |
 | [Workflow notebook](notebooks/01_thin_notebook.ipynb) | Run the reusable package functions. |
 | [Original notebook](trial_conversion_model.ipynb) | Explore the data and targeting example. |
 | [data.py](src/trial_conversion_model/data.py) | Download and clean data. |
 | [features.py](src/trial_conversion_model/features.py) | Build features and export the processed CSV. |
-| [train.py](src/trial_conversion_model/train.py) | Fit models, report train/test metrics, and save outputs. |
+| [training.py](src/trial_conversion_model/training.py) | Fit models, report train/test metrics, and save outputs. |
 | [models/](models/) | Saved models and evaluation reports. |
 | [.env.example](.env.example) | Database configuration template. |
 | [Model plan](trial-conversion-model-plan.md) | Business context and proposed deployment. |
@@ -172,6 +188,6 @@ Each metrics file contains train results first, then test results, matching the 
 - Validate on later trial cohorts and assess probability calibration before using summed scores for financial forecasts. Current results use a single random holdout.
 - Implement live day-3 scoring, daily lifecycle lists, and on-demand access with engineering.
 - Monitor performance and population drift as launch-campaign acquisition changes, and define retraining criteria.
-- Add automated tests. `tests/test_example.py` currently downloads data and trains logistic regression at module execution; it is a workflow example with side effects, not an isolated unit-test suite.
+- Add automated tests. `tests/test_example.py` is a workflow example with download and training side effects, not an isolated unit-test suite. Its training import still references the old module name and needs updating before use.
 
 Existing paid-subscriber churn, uplift modeling, and changes to trial length, pricing, or eligibility are outside the current scope. See the [full model plan](trial-conversion-model-plan.md) for the proposed business impact and deployment roadmap.
