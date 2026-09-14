@@ -1,0 +1,40 @@
+xgboost - Train Data
+ROC-AUC: 0.9305
+PR-AUC (average precision): 0.9413
+
+Confusion Matrix:
+
+                Predicted 0 Predicted 1
+Actual 0                453          79
+Actual 1                 93         512
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.83      0.85      0.84       532
+           1       0.87      0.85      0.86       605
+
+    accuracy                           0.85      1137
+   macro avg       0.85      0.85      0.85      1137
+weighted avg       0.85      0.85      0.85      1137
+
+
+xgboost - Test Data
+ROC-AUC: 0.8745
+PR-AUC (average precision): 0.8849
+
+Confusion Matrix:
+
+                Predicted 0 Predicted 1
+Actual 0                138          39
+Actual 1                 39         163
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.78      0.78      0.78       177
+           1       0.81      0.81      0.81       202
+
+    accuracy                           0.79       379
+   macro avg       0.79      0.79      0.79       379
+weighted avg       0.79      0.79      0.79       379

@@ -1,0 +1,40 @@
+logistic_regression - Train Data
+ROC-AUC: 0.8081
+PR-AUC (average precision): 0.8127
+
+Confusion Matrix:
+
+                Predicted 0 Predicted 1
+Actual 0                330         202
+Actual 1                 88         517
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.79      0.62      0.69       532
+           1       0.72      0.85      0.78       605
+
+    accuracy                           0.74      1137
+   macro avg       0.75      0.74      0.74      1137
+weighted avg       0.75      0.74      0.74      1137
+
+
+logistic_regression - Test Data
+ROC-AUC: 0.8274
+PR-AUC (average precision): 0.8097
+
+Confusion Matrix:
+
+                Predicted 0 Predicted 1
+Actual 0                116          61
+Actual 1                 29         173
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.80      0.66      0.72       177
+           1       0.74      0.86      0.79       202
+
+    accuracy                           0.76       379
+   macro avg       0.77      0.76      0.76       379
+weighted avg       0.77      0.76      0.76       379
