@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 trial-conversion-model = "trial_conversion_model:main"
+train = "scripts.train:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]
