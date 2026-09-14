@@ -1,0 +1,31 @@
+[project]
+name = "trial-conversion-model"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Husayn El Sharif", email = "14345478+helsharif@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "pandas>=3.0.5",
+    "psycopg2-binary>=2.9.13",
+    "python-dotenv>=1.2.3",
+    "scikit-learn>=1.9.1",
+    "sqlalchemy>=2.0.52",
+    "xgboost>=3.4.1",
+]
+
+[project.scripts]
+trial-conversion-model = "trial_conversion_model:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+]

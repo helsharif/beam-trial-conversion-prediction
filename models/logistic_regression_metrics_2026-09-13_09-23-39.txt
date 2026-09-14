@@ -1,0 +1,15 @@
+logistic_regression Confusion Matrix:
+
+                Predicted 0 Predicted 1
+Actual 0                116          61
+Actual 1                 29         173
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.80      0.66      0.72       177
+           1       0.74      0.86      0.79       202
+
+    accuracy                           0.76       379
+   macro avg       0.77      0.76      0.76       379
+weighted avg       0.77      0.76      0.76       379
