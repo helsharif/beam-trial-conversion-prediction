@@ -1,6 +1,8 @@
 # Beam Trial Conversion Prediction
 
-Predict whether a 14-day free trial will convert to a paid subscription using the first three days of app activity. This Python machine learning prototype compares logistic regression and XGBoost, with reusable data preparation, feature engineering, training, and evaluation functions.
+Predict whether a **14-day free trial will convert to a paid subscription**, using the first three days of app activity.
+
+This Python prototype compares **logistic regression** and **XGBoost**. It prepares data, builds engagement features, trains both models, and reports performance on **train data first, then test data**.
 
 Developed by Husayn El Sharif for the FutureProof DS ML Cohort 2026, Week 1 assignment. **Status: offline prototype; deployment and monitoring are planned.**
 
@@ -18,82 +20,11 @@ The modeling question is: **For a trial that started three days ago, how likely 
 
 The lifecycle team chooses the intervention cutoff based on its capacity. Predicted cancellation risk does not establish whether an intervention will change an outcome.
 
-## Current implementation
-
-1. Download completed-trial snapshots from PostgreSQL view `ml.trial_snapshot_latest`.
-2. Load the local CSV, remove duplicate rows and rows with missing values, and parse date columns.
-3. Build engagement features from the first three days and save the processed data.
-4. One-hot encode country and device type with `pandas.get_dummies`.
-5. Fit and evaluate both models using a stratified 75%/25% train/test split with `random_state=42`.
-6. Print ROC AUC and save timestamped models, confusion matrices, and classification reports.
-
-Logistic regression uses a `StandardScaler` pipeline and `max_iter=1000`. XGBoost uses 400 estimators, depth 3, learning rate 0.05, minimum child weight 8, and row/column sampling of 0.9.
-
-### Data and features
-
-The recorded notebook run contains **1,516 completed trials**, with a **53.23% conversion rate**. The target is `converted`: `1` means conversion and `0` means cancellation/non-conversion.
-
-The input CSV requires these columns:
-
-```text
-trial_id, user_id, snapshot_date, trial_started_at, country, device_type,
-sessions_day1, sessions_day2, sessions_day3, listen_sessions_3d,
-total_minutes_3d, converted
-```
-
-| Model feature | Meaning |
-| --- | --- |
-| `sessions_3d` | Total sessions across days 1–3. |
-| `active_days_3d` | Number of those days with at least one session. |
-| `day1_share` | Day-1 sessions divided by total sessions. |
-| `listen_share` | Listening sessions divided by total sessions. |
-| `avg_session_minutes` | Total minutes divided by total sessions. |
-| `total_minutes_3d` | Total engagement time during days 1–3. |
-| `country`, `device_type` | One-hot encoded categorical attributes. |
-
-Undefined shares and average durations for zero-session trials are filled with zero. Identifiers and dates are not model inputs.
-
-### Recorded evaluation
-
-These results come from the saved notebook outputs and the September 13, 2026 metric files in `models/`; they are not a newly executed benchmark. Both models use a holdout of 379 trials: 177 non-converters and 202 converters.
-
-| Model | ROC AUC | Accuracy | Non-converter recall | Converter recall |
-| --- | --- | --- | --- | --- |
-| Logistic regression | 0.8274 | 0.76 | 0.66 | 0.86 |
-| XGBoost | 0.8745 | 0.79 | 0.78 | 0.81 |
-
-The original exploratory notebook also illustrates a conversion-probability cutoff of 0.35: 152 of 379 holdout trials are flagged, with 17.1% actual conversion among flagged trials versus 77.5% among the rest. This is an illustrative targeting analysis, not a measured intervention effect or an approved production cutoff.
-
-## Repository layout
-
-```text
-.
-├── README.md
-├── trial-conversion-model-plan.md       # Business context and roadmap
-├── trial_conversion_model.ipynb         # Original exploration and modeling
-├── notebooks/
-│   └── 01_thin_notebook.ipynb           # Workflow using the reusable package
-├── src/trial_conversion_model/
-│   ├── __init__.py                      # Package version
-│   ├── data.py                          # Database download and cleaning
-│   ├── features.py                      # Feature construction and CSV export
-│   └── train.py                         # Model fitting, evaluation, persistence
-├── data/
-│   ├── 01_raw/                          # Downloaded snapshot (CSV ignored)
-│   ├── 02_interim/                      # Placeholder
-│   ├── 03_processed/                    # Engineered dataset (CSV ignored)
-│   └── 04_predictions/                  # Placeholder
-├── models/                             # Saved models and metric reports
-├── scripts/                            # Placeholder
-├── tests/test_example.py                # Executable workflow example
-├── .env.example                        # Database configuration template
-├── pyproject.toml                      # Dependencies and package metadata
-└── uv.lock                             # Locked dependency versions
-```
-
-## Setup and usage
+## Quick start
 
 Use **Python 3.13 or newer** and `uv`. Run commands from the repository root; the package reads and writes relative data/model paths.
+
+### 1. Install the project
 
 ```bash
 git clone https://github.com/helsharif/beam-trial-conversion-prediction.git
@@ -101,9 +32,7 @@ cd beam-trial-conversion-prediction
 uv sync --locked
 ```
 
-The dependencies include pandas, NumPy, scikit-learn, XGBoost, Matplotlib, SQLAlchemy, psycopg2, and python-dotenv. The development group includes `ipykernel` for notebook execution.
-
-### Configure data access
+### 2. Configure data access
 
 Copy `.env.example` to `.env` and supply valid database connection values. In PowerShell:
 
@@ -115,7 +44,7 @@ The loader reads `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. 
 
 Alternatively, place an authorized CSV with the schema above at `data/01_raw/trials_raw.csv` and skip `download_data()`.
 
-### Run the package workflow
+### 3. Train both models
 
 Start Python with `uv run python`, then run:
 
@@ -139,7 +68,93 @@ For interactive work, open [notebooks/01_thin_notebook.ipynb](notebooks/01_thin_
 
 The `trial-conversion-model` console entry declared in `pyproject.toml` points to a `main` function that is not implemented; use the Python workflow or thin notebook above.
 
-### Generated outputs
+## How it works
+
+1. Download completed-trial snapshots from PostgreSQL view `ml.trial_snapshot_latest`.
+2. Load the local CSV, remove duplicate rows and rows with missing values, and parse date columns.
+3. Build engagement features from the first three days and save the processed data.
+4. One-hot encode country and device type with `pandas.get_dummies`.
+5. Fit and evaluate both models using a stratified 75%/25% train/test split with `random_state=42`.
+6. Print and export train metrics followed by test metrics: ROC-AUC, PR-AUC (average precision), confusion matrices, and classification reports.
+7. Save each fitted model and its evaluation report with a matching timestamp.
+
+Logistic regression uses a `StandardScaler` pipeline and `max_iter=1000`. XGBoost uses 400 estimators, depth 3, learning rate 0.05, minimum child weight 8, and row/column sampling of 0.9.
+
+## Data and features
+
+The recorded notebook run contains **1,516 completed trials**, with a **53.23% conversion rate**. The target is `converted`: `1` means conversion and `0` means cancellation/non-conversion.
+
+The input CSV requires these columns:
+
+```text
+trial_id, user_id, snapshot_date, trial_started_at, country, device_type,
+sessions_day1, sessions_day2, sessions_day3, listen_sessions_3d,
+total_minutes_3d, converted
+```
+
+| Model feature | Meaning |
+| --- | --- |
+| `sessions_3d` | Total sessions across days 1–3. |
+| `active_days_3d` | Number of those days with at least one session. |
+| `day1_share` | Day-1 sessions divided by total sessions. |
+| `listen_share` | Listening sessions divided by total sessions. |
+| `avg_session_minutes` | Total minutes divided by total sessions. |
+| `total_minutes_3d` | Total engagement time during days 1–3. |
+| `country`, `device_type` | One-hot encoded categorical attributes. |
+
+Undefined shares and average durations for zero-session trials are filled with zero. Identifiers and dates are not model inputs.
+
+## Evaluation: train first, then test
+
+After fitting, each model prints a report and saves the same report to a text file. Each report contains **Train Data**, followed by **Test Data**, with:
+
+| Metric | Meaning |
+| --- | --- |
+| ROC-AUC | How well conversion probabilities rank converters above non-converters. |
+| PR-AUC (average precision) | Precision-recall performance for conversion, calculated with `average_precision_score` from predicted probabilities, without interpolation. |
+| Confusion matrix | Counts of correct and incorrect predictions. Rows are actual labels; columns are predicted labels. |
+| Classification report | Precision, recall, F1-score, support, and accuracy using the model's predicted labels. |
+
+Train metrics describe fit to the training data. Test metrics describe performance on held-out trials. Comparing them helps identify a gap between training and test performance.
+
+### Saved results
+
+These values come from the **September 14, 2026** reports linked below, not a new training run. Both models use **1,137 train trials** and **379 test trials**. The test set contains 177 non-converters and 202 converters.
+
+| Split | Model | ROC-AUC | PR-AUC (average precision) | Accuracy |
+| --- | --- | --- | --- | --- |
+| Train | Logistic regression | 0.8081 | 0.8127 | 0.74 |
+| Train | XGBoost | 0.9305 | 0.9413 | 0.85 |
+| Test | Logistic regression | 0.8274 | 0.8097 | 0.76 |
+| Test | XGBoost | 0.8745 | 0.8849 | 0.79 |
+
+The confusion matrices from the same run are summarized below. **TN** means correctly predicted non-conversion, **FP** means incorrectly predicted conversion, **FN** means incorrectly predicted non-conversion, and **TP** means correctly predicted conversion.
+
+| Split | Model | TN | FP | FN | TP |
+| --- | --- | --- | --- | --- | --- |
+| Train | Logistic regression | 330 | 202 | 88 | 517 |
+| Train | XGBoost | 453 | 79 | 93 | 512 |
+| Test | Logistic regression | 116 | 61 | 29 | 173 |
+| Test | XGBoost | 138 | 39 | 39 | 163 |
+
+XGBoost has higher test ROC-AUC and average precision in this run. Its stronger train scores also show a train/test gap that warrants validation on later cohorts.
+
+Full reports: [logistic regression](models/logistic_regression_metrics_2026-09-14_07-13-35.txt) · [XGBoost](models/xgboost_metrics_2026-09-14_07-13-35.txt).
+
+## Where to find things
+
+| Location | Purpose |
+| --- | --- |
+| [Workflow notebook](notebooks/01_thin_notebook.ipynb) | Run the reusable package functions. |
+| [Original notebook](trial_conversion_model.ipynb) | Explore the data and targeting example. |
+| [data.py](src/trial_conversion_model/data.py) | Download and clean data. |
+| [features.py](src/trial_conversion_model/features.py) | Build features and export the processed CSV. |
+| [train.py](src/trial_conversion_model/train.py) | Fit models, report train/test metrics, and save outputs. |
+| [models/](models/) | Saved models and evaluation reports. |
+| [.env.example](.env.example) | Database configuration template. |
+| [Model plan](trial-conversion-model-plan.md) | Business context and proposed deployment. |
+
+## Generated files
 
 | Output | Location / format |
 | --- | --- |
@@ -147,9 +162,9 @@ The `trial-conversion-model` console entry declared in `pyproject.toml` points t
 | Engineered dataset | `data/03_processed/trials_clean.csv` |
 | Logistic regression pipeline | `models/logistic_regression_<timestamp>.joblib` |
 | XGBoost model | `models/xgboost_<timestamp>.json` |
-| Evaluation reports | `models/<model_name>_metrics_<timestamp>.txt` |
+| Train and test metrics, one report per model | `models/<model_name>_metrics_<timestamp>.txt` |
 
-ROC AUC is printed during training; the text reports contain confusion matrices and classification metrics. The saved estimators do not package feature engineering or categorical encoding. Future inference must reproduce the training features and encoded column order.
+Each metrics file contains train results first, then test results, matching the console output. The saved models do not include feature engineering or categorical encoding. Inference must reproduce the training features and encoded column order.
 
 ## Limitations and next steps
 
@@ -160,7 +175,3 @@ ROC AUC is printed during training; the text reports contain confusion matrices 
 - Add automated tests. `tests/test_example.py` currently downloads data and trains logistic regression at module execution; it is a workflow example with side effects, not an isolated unit-test suite.
 
 Existing paid-subscriber churn, uplift modeling, and changes to trial length, pricing, or eligibility are outside the current scope. See the [full model plan](trial-conversion-model-plan.md) for the proposed business impact and deployment roadmap.
-
-## Keywords
-
-Trial conversion prediction, subscription analytics, customer engagement, growth analytics, binary classification, feature engineering, logistic regression, XGBoost, scikit-learn, PostgreSQL, Python, and machine learning.
