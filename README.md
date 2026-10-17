@@ -4,7 +4,7 @@ Predict whether a **14-day free trial will convert to a paid subscription**, usi
 
 This Python prototype compares **logistic regression** and **XGBoost**. It prepares data, builds engagement features, trains both models, and reports performance on **train data first, then test data**.
 
-Developed by Husayn El Sharif for the FutureProof DS ML Cohort 2026, Week 1 assignment. **Status: offline prototype; deployment and monitoring are planned.**
+Developed by Husayn El Sharif for the FutureProof DS ML Cohort 2026, beginning with the Week 1 assignment. **Status: model training prototype, a prediction service deployed and tested on AWS EC2, and a local Streamlit dashboard verified against S3 prediction and drift artifacts.** This checkout includes training and dashboard code; the deployed API and artifact-producing jobs live outside this checkout.
 
 ## Business problem
 
@@ -81,6 +81,18 @@ For interactive work, open [notebooks/01_thin_notebook.ipynb](notebooks/01_thin_
 
 The `trial-conversion-model` console entry declared in `pyproject.toml` still points to a package `main` function that is not implemented. Use `uv run scripts/train.py` for the full workflow.
 
+### Start the MLflow tracking server
+
+With MLflow installed in the project's environment, run this command from the repository root:
+
+```powershell
+uv run mlflow server --host 127.0.0.1 --port 5001 --workers 1
+```
+
+Open [the MLflow UI](http://127.0.0.1:5001) in your browser. Keep the terminal running while using the server; press **Ctrl+C** to stop it.
+
+The `--workers 1` option uses a single server worker to work around the Windows multi-worker startup failure (`WinError 10022`). It applies only to this command and requires no persistent environment-variable changes.
+
 ## How it works
 
 `scripts/train.py` coordinates the workflow; the reusable data, feature, and training functions live in `src/trial_conversion_model/`.
@@ -156,6 +168,54 @@ XGBoost has higher test ROC-AUC and average precision in this run. Its stronger 
 
 Full reports: [logistic regression](models/logistic_regression_metrics_2026-09-14_11-04-07.txt) · [XGBoost](models/xgboost_metrics_2026-09-14_11-04-07.txt).
 
+## AWS EC2 prediction service
+
+On **October 3, 2026**, the prediction service was confirmed working on AWS EC2. A request from a local Windows PowerShell session reached the remote `/predict` endpoint and returned a conversion probability and band.
+
+### Deployment accomplishments
+
+- Packaged the service for Linux using Docker, Python 3.13, and `uv`. The Dockerfile includes `libgomp1`, the OpenMP runtime required by XGBoost in the slim Python image.
+- Included the application source and trained XGBoost artifact (`models/model.json`) in the image. The service loads the saved model for inference; it does not train a model when serving requests.
+- Configured Uvicorn to run `trial_conversion_model.api.main:app` on `0.0.0.0:8000`.
+- Built and published the image to a **private GitHub Container Registry (GHCR) package**, then authenticated to GHCR from EC2 to pull and run it.
+- Completed the EC2 launch workflow using Docker in detached mode, port mapping `8000:8000`, and the `unless-stopped` restart policy, with Docker enabled at boot.
+- Verified remote prediction requests from PowerShell using JSON request bodies and displayed the raw JSON response with `Invoke-WebRequest`.
+
+The deployment used the Dockerfile and API implementation discussed during deployment work. **This checkout does not yet contain that Dockerfile, `src/trial_conversion_model/api/`, or `models/model.json`.** The training quick start above is supported by the files here; reproducing the container build also requires bringing those deployment files into this repository.
+
+### Verified prediction example
+
+Replace `YOUR_EC2_PUBLIC_IP` with the running instance's current public address. Run this in **PowerShell**:
+
+```powershell
+$body = @{
+    sessions_day1      = 3
+    sessions_day2      = 2
+    sessions_day3      = 2
+    listen_sessions_3d = 5
+    total_minutes_3d   = 150
+    country           = "US"
+    device_type       = "iOS"
+} | ConvertTo-Json
+
+$request = @{
+    Uri             = "http://YOUR_EC2_PUBLIC_IP:8000/predict"
+    Method          = "POST"
+    ContentType     = "application/json"
+    Body            = $body
+    UseBasicParsing = $true
+}
+(Invoke-WebRequest @request).Content
+```
+
+The recorded response for this input was:
+
+```json
+{"conv_prob":0.848,"conv_band":"high"}
+```
+
+`conv_prob` is the predicted conversion probability; `conv_band` is the service's assigned band. This result validates the deployed request-to-prediction path. The value may change when the deployed model changes.
+
 ## Where to find things
 
 | Location | Purpose |
@@ -167,7 +227,11 @@ Full reports: [logistic regression](models/logistic_regression_metrics_2026-09-1
 | [features.py](src/trial_conversion_model/features.py) | Build features and export the processed CSV. |
 | [training.py](src/trial_conversion_model/training.py) | Fit models, report train/test metrics, and save outputs. |
 | [models/](models/) | Saved models and evaluation reports. |
-| [.env.example](.env.example) | Database configuration template. |
+| [streamlit_app.py](streamlit_app.py) | S3 dashboard: latest ranked trials, drift verdict, and monthly history. |
+| [dashboard_data.py](src/trial_conversion_model/dashboard_data.py) | Read-only S3 access, artifact validation, ranking, and drift report selection. |
+| [test_dashboard.py](tests/test_dashboard.py) | Isolated dashboard data tests. |
+| [.streamlit/config.toml](.streamlit/config.toml) | Dashboard theme and localhost binding. |
+| [.env.example](.env.example) | Database and optional S3 dashboard configuration template. |
 | [Model plan](trial-conversion-model-plan.md) | Business context and proposed deployment. |
 
 ## Generated files
@@ -186,8 +250,68 @@ Each metrics file contains train results first, then test results, matching the 
 
 - Establish a direct comparison against the raw-session-count heuristic required by the model plan; the current logistic regression baseline uses the full feature set.
 - Validate on later trial cohorts and assess probability calibration before using summed scores for financial forecasts. Current results use a single random holdout.
-- Implement live day-3 scoring, daily lifecycle lists, and on-demand access with engineering.
-- Monitor performance and population drift as launch-campaign acquisition changes, and define retraining criteria.
-- Add automated tests. `tests/test_example.py` is a workflow example with download and training side effects, not an isolated unit-test suite. Its training import still references the old module name and needs updating before use.
+- Bring the deployed Dockerfile, API source, and serving model artifact into this repository so the EC2 deployment can be reproduced from a fresh clone.
+- Integrate the working EC2 prediction endpoint with live day-3 scoring and daily lifecycle lists with engineering.
+- Extend the S3 drift dashboard with observed performance once labels arrive, and define retraining criteria. The dashboard consumes existing reports; it does not run scoring, calculate drift, or schedule upstream jobs.
+- Expand automated coverage beyond the five dashboard data tests. `tests/test_example.py` is a workflow example with download and training side effects, not an isolated unit-test suite. Its training import still references the old module name and needs updating before use.
 
 Existing paid-subscriber churn, uplift modeling, and changes to trial length, pricing, or eligibility are outside the current scope. See the [full model plan](trial-conversion-model-plan.md) for the proposed business impact and deployment roadmap.
+
+
+## Streamlit S3 dashboard
+
+Run from this checkout:
+
+```powershell
+uv sync --locked
+uv run streamlit run streamlit_app.py
+```
+
+Open [the dashboard](http://localhost:8501). If port 8501 is occupied, run
+`uv run streamlit run streamlit_app.py --server.port 8502` and open
+[port 8502](http://localhost:8502), as used during local verification. Keep the
+terminal running while using the dashboard; press **Ctrl+C** to stop it.
+
+The dashboard reads `predictions/scored_YYYY-MM-DD.csv`
+and dated JSON reports under `monitoring/` using read-only S3 operations.
+Configure `S3_BUCKET`, `AWS_DEFAULT_REGION`, `AWS_ACCESS_KEY_ID`, and
+`AWS_SECRET_ACCESS_KEY` in `.env` (plus `AWS_SESSION_TOKEN` for temporary credentials).
+Alternatively, set `DASHBOARD_ENV_FILE` in the local `.env` to the absolute path of
+an existing S3 `.env`. Credentials are read at runtime and never displayed.
+The standard AWS credential chain/profile is also supported. Process environment
+values take precedence over local `.env`, which takes precedence over the external
+file. Permissions required: `s3:ListBucket` on the bucket and `s3:GetObject` on
+`predictions/*` and `monitoring/*`. No writes to S3 are performed.
+
+The latest list ranks lowest conversion probability first, with country/device
+filters, an adjustable outreach cutoff, and CSV download. Latest means the date
+in the artifact filename, independently for predictions and monitoring; upload
+times only break ties. A warning identifies mismatched dates or old predictions.
+The default history covers 31 calendar days ending at the latest artifact date;
+a calendar-month selector is also available. Daily charts and a downloadable
+table show volume, mean predicted conversion, and drift. These are model scores,
+not observed conversion performance. Missing days remain missing.
+
+Monitoring JSON must contain boolean `drift` and numeric `drifted_share` (0–1).
+Reports marked `source: backfill` are labeled synthetic; measured reports take
+precedence on overlapping dates. Invalid artifacts are reported rather than
+silently treated as healthy. CSVs require `conversion_probability` (or `conv_prob`)
+with values between 0 and 1. S3 reads are cached for five minutes; use **Refresh
+from S3** to fetch immediately. The server binds to localhost by default.
+
+Run isolated dashboard tests without triggering the legacy training example:
+
+```powershell
+uv run python -m unittest discover -s tests -p test_dashboard.py
+```
+
+### Verification completed October 17, 2026
+
+- All five isolated tests passed: ranking and identifier preservation, invalid probabilities, invalid verdicts, measured-report precedence, and paginated artifact discovery using filename dates.
+- Streamlit AppTest checks against live S3 passed for the default history, calendar-month selection, outreach filtering, and missing-day handling.
+- The latest snapshot contained 120 trials, a 34.8% mean predicted conversion probability, and 91 candidates below the 0.50 outreach cutoff. The October 17 measured drift report flagged 100% of features as drifted.
+- The default window contained 31 days of predictions and six days with drift detected after preferring measured reports over backfill. These are verification-time results and will change as S3 artifacts change.
+- The local HTTP health check passed on port 8502. The dashboard was then stopped; it starts only when launched with the command above.
+
+The Git-tracked configuration contains no credentials or machine-specific `.env`
+path. Each checkout must supply its own ignored `.env` or AWS runtime credentials.

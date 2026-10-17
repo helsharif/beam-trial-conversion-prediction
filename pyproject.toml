@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "boto3>=1.43.114",
     "matplotlib>=3.11.2",
     "numpy>=2.5.3",
     "pandas>=3.0.5",
@@ -15,6 +16,7 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "scikit-learn>=1.9.1",
     "sqlalchemy>=2.0.52",
+    "streamlit>=1.66.0",
     "xgboost>=3.4.1",
 ]
 
